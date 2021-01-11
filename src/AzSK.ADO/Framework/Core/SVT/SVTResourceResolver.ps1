@@ -21,6 +21,7 @@ class SVTResourceResolver: AzSKRoot {
     [string] $organizationName
     hidden [string[]] $ProjectNames = @();
     hidden [string[]] $BuildNames = @();
+    hidden [string[]] $RepoNames = @();
     hidden [string[]] $ReleaseNames = @();
     hidden [string[]] $AgentPools = @();
     hidden [string[]] $ServiceConnections = @();
@@ -45,17 +46,17 @@ class SVTResourceResolver: AzSKRoot {
     hidden [string[]] $VariableGroupIds = @();
     hidden [bool] $isServiceIdBasedScan = $false;
 
-    SVTResourceResolver([string]$organizationName, $ProjectNames, $BuildNames, $ReleaseNames, $AgentPools, $ServiceConnectionNames, $VariableGroupNames, $MaxObj, $ScanAllArtifacts, $PATToken, $ResourceTypeName, $AllowLongRunningScan, $ServiceId, $IncludeAdminControls, $skipOrgUserControls): Base($organizationName, $PATToken) {
+    SVTResourceResolver([string]$organizationName, $ProjectNames, $BuildNames, $RepoNames, $ReleaseNames, $AgentPools, $ServiceConnectionNames, $VariableGroupNames, $MaxObj, $ScanAllArtifacts, $PATToken, $ResourceTypeName, $AllowLongRunningScan, $ServiceId, $IncludeAdminControls, $skipOrgUserControls): Base($organizationName, $PATToken) {
 
         $this.MaxObjectsToScan = $MaxObj #default = 0 => scan all if "*" specified...
-        $this.SetallTheParamValues($organizationName, $ProjectNames, $BuildNames, $ReleaseNames, $AgentPools, $ServiceConnectionNames, $VariableGroupNames, $ScanAllArtifacts, $PATToken, $ResourceTypeName, $AllowLongRunningScan, $ServiceId, $IncludeAdminControls);            
+        $this.SetallTheParamValues($organizationName, $ProjectNames, $BuildNames, $RepoNames, $ReleaseNames, $AgentPools, $ServiceConnectionNames, $VariableGroupNames, $ScanAllArtifacts, $PATToken, $ResourceTypeName, $AllowLongRunningScan, $ServiceId, $IncludeAdminControls);            
         $this.skipOrgUserControls = $skipOrgUserControls
 		if ([RemoteReportHelper]::IsAIOrgTelemetryEnabled()) { 
 			$this.IsAIEnabled = $true; 
 		}
     }
 
-    [void] SetallTheParamValues([string]$organizationName, $ProjectNames, $BuildNames, $ReleaseNames, $AgentPools, $ServiceConnectionNames, $VariableGroupNames, $ScanAllArtifacts, $PATToken, $ResourceTypeName, $AllowLongRunningScan, $ServiceId, $IncludeAdminControls) { 
+    [void] SetallTheParamValues([string]$organizationName, $ProjectNames, $BuildNames, $RepoNames, $ReleaseNames, $AgentPools, $ServiceConnectionNames, $VariableGroupNames, $ScanAllArtifacts, $PATToken, $ResourceTypeName, $AllowLongRunningScan, $ServiceId, $IncludeAdminControls) { 
         $this.organizationName = $organizationName
         $this.ResourceTypeName = $ResourceTypeName
         $this.allowLongRunningScan = $AllowLongRunningScan
@@ -80,6 +81,16 @@ class SVTResourceResolver: AzSKRoot {
         }
         elseif ($ResourceTypeName -eq [ResourceTypeName]::Build -or $ResourceTypeName -eq [ResourceTypeName]::Build_Release) {
             $this.BuildNames = "*"
+        }
+
+        if (-not [string]::IsNullOrEmpty($RepoNames)) {
+            $this.RepoNames += $this.ConvertToStringArray($RepoNames);
+            if ($this.RepoNames.Count -eq 0) {
+                throw [SuppressedException] "The parameter 'RepoNames' does not contain any string."
+            }
+        }
+        elseif ($ResourceTypeName -eq [ResourceTypeName]::Repo) {
+            $this.RepoNames = "*"
         }
 
         if (-not [string]::IsNullOrEmpty($ReleaseNames)) {
@@ -142,13 +153,14 @@ class SVTResourceResolver: AzSKRoot {
                 $this.ProjectNames = "*"
             }
             $this.BuildNames = "*"
+            $this.RepoNames = "*"
             $this.ReleaseNames = "*"
             $this.AgentPools = "*"
             $this.ServiceConnections = "*"
             $this.VariableGroups = "*"
         }  
 
-        if (( $this.MaxObjectsToScan -eq 0 -or $this.MaxObjectsToScan -gt $this.longRunningScanCheckPoint) -and ($this.ProjectNames -eq "*" -or $this.BuildNames -eq "*" -or $this.ReleaseNames -eq "*" -or $this.ServiceConnections -eq "*" -or $this.AgentPools -eq "*" -or $this.VariableGroups -eq "*")) {            
+        if (( $this.MaxObjectsToScan -eq 0 -or $this.MaxObjectsToScan -gt $this.longRunningScanCheckPoint) -and ($this.ProjectNames -eq "*" -or $this.BuildNames -eq "*" -or $this.RepoNames -eq "*" -or $this.ReleaseNames -eq "*" -or $this.ServiceConnections -eq "*" -or $this.AgentPools -eq "*" -or $this.VariableGroups -eq "*")) {            
             $this.PublishCustomMessage("Using '*' can take a long time for the scan to complete in larger projects. `nYou may want to provide a comma-separated list of projects, builds, releases, service connections, agent pools and variable groups. `n ", [MessageType]::Warning);
             <# BUGBUG: [Aug-2020] Removing this until we can determine the right approach to init org-policy-url for ADO.
             if (!$this.ControlSettings) {
@@ -346,6 +358,40 @@ class SVTResourceResolver: AzSKRoot {
                         
                         #Initialysing null to SecurityNamespaceId variable for new scan, it is static variable, setting once only in svc class and same value is applicable for all the svc con withing org
                         [Build]::SecurityNamespaceId = $null;
+                            
+                    }
+                    # repos
+                    if ($this.RepoNames.Count -gt 0 -and ($this.ResourceTypeName -in ([ResourceTypeName]::Repo, [ResourceTypeName]::All))) {
+                        if ($this.ProjectNames -ne "*") {
+                            $this.PublishCustomMessage("Getting repos configurations...");
+                        }
+                        $repoDefnURL = ("https://dev.azure.com/$($this.organizationName)/$($projectName)/_apis/git/repositories?api-version=6.0")
+                        $repoDefnsObj = [WebRequestHelper]::InvokeGetWebRequest($repoDefnURL) 
+                        $projectData["repositories"] = ($repoDefnsObj | Measure-Object).Count;
+                        if ($this.RepoNames -eq "*") {
+                            if (([Helpers]::CheckMember($repoDefnsObj, "count") -and $repoDefnsObj[0].count -gt 0) -or (($repoDefnsObj | Measure-Object).Count -gt 0 -and [Helpers]::CheckMember($repoDefnsObj[0], "name"))) {
+                                $nObj = $this.MaxObjectsToScan
+                                foreach ($repo in $repoDefnsObj) {
+                                    $link = $repo.url.split('?')[0].replace('_apis/git/repositories', '_git');
+                                    $repoResourceId = "organization/$organizationId/project/$projectId/repositories/$($repo.id)";
+                                    $this.AddSVTResource($repo.name, $repo.project.name, "ADO.Repo", $repoResourceId, $repo, $link);
+                                   
+                                    if (--$nObj -eq 0) { break; } 
+                                }
+                                $repoDefnsObj = $null;
+                                Remove-Variable repoDefnsObj;
+                            }
+                        }
+                        else {
+                            $this.RepoNames | ForEach-Object {
+                                $repoName = $_
+                                $repoURL = "https://dev.azure.com/$($this.organizationName)/$($projectName)/_apis/git/repositories/$($repoName)?api-version=5.0"
+                                $repo = [WebRequestHelper]::InvokeGetWebRequest($repoURL) 
+                                $link = $repo.url.split('?')[0].replace('_apis/git/repositories', '_git');
+                                $repoResourceId = "organization/$organizationId/project/$projectId/repositories/$($repo.id)";
+                                $this.AddSVTResource($repo.name, $repo.project.name, "ADO.Repo", $repoResourceId, $repo, $link);
+                            }
+                        }
                             
                     }
                     #check if long running scan allowed or not.
@@ -722,10 +768,12 @@ class SVTResourceResolver: AzSKRoot {
     # getting resources count and sending them to telemetry as well
     [void] GetResourceCount($projectName, $organizationId, $projectId, $projectData) {
         try{
-            # fetching the repository count of a project
-            $resourceURL = "https://dev.azure.com/$($this.organizationName)/$($projectName)/_apis/git/repositories?api-version=6.0"
-            $responseList = [WebRequestHelper]::InvokeGetWebRequest($resourceURL) ;
-            $projectData['repositories'] = ($responseList | Measure-Object).Count
+            # fetching the repository count of a project if not calculated earlier
+            if($projectData['repositories'] -eq -1) {
+                $resourceURL = "https://dev.azure.com/$($this.organizationName)/$($projectName)/_apis/git/repositories?api-version=6.0"
+                $responseList = [WebRequestHelper]::InvokeGetWebRequest($resourceURL) ;
+                $projectData['repositories'] = ($responseList | Measure-Object).Count
+            }
 
             # fetching the testPlan count of a project
             $resourceURL = "https://dev.azure.com/$($this.organizationName)/$($projectName)/_apis/testplan/plans?api-version=6.0-preview.1"

@@ -1,16 +1,13 @@
 Set-StrictMode -Version Latest 
-class Project: ADOSVTBase
-{    
+class Project: ADOSVTBase {    
     [PSObject] $PipelineSettingsObj = $null
     hidden $PAMembers = @()
 
-    Project([string] $subscriptionId, [SVTResource] $svtResource): Base($subscriptionId,$svtResource) 
-    {
+    Project([string] $subscriptionId, [SVTResource] $svtResource): Base($subscriptionId, $svtResource) {
         $this.GetPipelineSettingsObj()
     }
 
-    GetPipelineSettingsObj()
-    {
+    GetPipelineSettingsObj() {
         $apiURL = "https://dev.azure.com/{0}/_apis/Contribution/HierarchyQuery?api-version=5.0-preview.1" -f $($this.SubscriptionContext.SubscriptionName);
         #TODO: testing adding below line commenting above line
         #$apiURL = "https://dev.azure.com/{0}/_apis/Contribution/HierarchyQuery?api-version=5.0-preview.1" -f $($this.SubscriptionContext.SubscriptionName);
@@ -21,18 +18,17 @@ class Project: ADOSVTBase
         $inputbody = "{'contributionIds':['ms.vss-build-web.pipelines-general-settings-data-provider'],'dataProviderContext':{'properties':{'sourcePage':{'url':'$orgUrl/$projectName/_settings/settings','routeId':'ms.vss-admin-web.project-admin-hub-route','routeValues':{'project':'$projectName','adminPivot':'settings','controller':'ContributedPage','action':'Execute'}}}}}" | ConvertFrom-Json
     
         $responseObj = $null
-        try{
-            $responseObj = [WebRequestHelper]::InvokePostWebRequest($apiURL,$inputbody);
+        try {
+            $responseObj = [WebRequestHelper]::InvokePostWebRequest($apiURL, $inputbody);
         }
-        catch{
+        catch {
             #Write-Host "Pipeline settings for the project [$projectName] can not be fetched."
         }
     
-        if($responseObj){
-            if([Helpers]::CheckMember($responseObj,"dataProviders"))
-            {
+        if ($responseObj) {
+            if ([Helpers]::CheckMember($responseObj, "dataProviders")) {
                 try {
-                    if($responseObj.dataProviders.'ms.vss-build-web.pipelines-general-settings-data-provider'){
+                    if ($responseObj.dataProviders.'ms.vss-build-web.pipelines-general-settings-data-provider') {
                         $this.PipelineSettingsObj = $responseObj.dataProviders.'ms.vss-build-web.pipelines-general-settings-data-provider'
                     } 
                 }
@@ -43,203 +39,166 @@ class Project: ADOSVTBase
         }
     }
 
-    hidden [ControlResult] CheckPublicProjects([ControlResult] $controlResult)
-	{
-        try 
-        {
-            if([Helpers]::CheckMember($this.ResourceContext.ResourceDetails,"visibility"))
-            {
+    hidden [ControlResult] CheckPublicProjects([ControlResult] $controlResult) {
+        try {
+            if ([Helpers]::CheckMember($this.ResourceContext.ResourceDetails, "visibility")) {
                 $visibility = $this.ResourceContext.ResourceDetails.visibility;
-                if(($visibility -eq "private") -or ($visibility -eq "organization"))
-                {
+                if (($visibility -eq "private") -or ($visibility -eq "organization")) {
                     $controlResult.AddMessage([VerificationResult]::Passed, "Project visibility is set to '$visibility'."); 
 
                 }
-                else # For orgs with public projects allowed, this control needs to be attested by the project admins. 
-                {
+                else {
+                    # For orgs with public projects allowed, this control needs to be attested by the project admins. 
                     $controlResult.AddMessage([VerificationResult]::Failed, "Project visibility is set to '$visibility'.");
                 }
             }
-            else 
-            {
-                $controlResult.AddMessage([VerificationResult]::Error,"Project visibility details could not be fetched.");
+            else {
+                $controlResult.AddMessage([VerificationResult]::Error, "Project visibility details could not be fetched.");
             }
         }
-        catch 
-        {
-            $controlResult.AddMessage([VerificationResult]::Error,"Project visibility details could not be fetched.");
+        catch {
+            $controlResult.AddMessage([VerificationResult]::Error, "Project visibility details could not be fetched.");
         }
         return $controlResult;
     }
 
-    hidden [ControlResult] CheckBadgeAnonAccess([ControlResult] $controlResult)
-    {
-       if($this.PipelineSettingsObj)
-       {
+    hidden [ControlResult] CheckBadgeAnonAccess([ControlResult] $controlResult) {
+        if ($this.PipelineSettingsObj) {
             
-            if($this.PipelineSettingsObj.statusBadgesArePrivate.enabled -eq $true )
-            {
+            if ($this.PipelineSettingsObj.statusBadgesArePrivate.enabled -eq $true ) {
                 $controlResult.AddMessage([VerificationResult]::Passed, "Anonymous access to status badge API is disabled. It is set as '$($this.PipelineSettingsObj.statusBadgesArePrivate.orgEnabled)' at organization scope.");
             }
-            else{
+            else {
                 $controlResult.AddMessage([VerificationResult]::Failed, "Anonymous access to status badge API is enabled. It is set as '$($this.PipelineSettingsObj.statusBadgesArePrivate.orgEnabled)' at organization scope.");
             }       
-       }
-       else{
+        }
+        else {
             $controlResult.AddMessage([VerificationResult]::Manual, "Pipeline settings could not be fetched due to insufficient permissions at project scope.");
-       }
+        }
         return $controlResult
     }
 
-    hidden [ControlResult] CheckSettableQueueTime([ControlResult] $controlResult)
-    {
-       if($this.PipelineSettingsObj)
-       {
+    hidden [ControlResult] CheckSettableQueueTime([ControlResult] $controlResult) {
+        if ($this.PipelineSettingsObj) {
             
-            if($this.PipelineSettingsObj.enforceSettableVar.enabled -eq $true )
-            {
+            if ($this.PipelineSettingsObj.enforceSettableVar.enabled -eq $true ) {
                 $controlResult.AddMessage([VerificationResult]::Passed, "Only limited variables can be set at queue time. It is set as '$($this.PipelineSettingsObj.enforceSettableVar.orgEnabled)' at organization scope.");
             }
-            else{
+            else {
                 $controlResult.AddMessage([VerificationResult]::Failed, "All variables can be set at queue time. It is set as '$($this.PipelineSettingsObj.enforceSettableVar.orgEnabled)' at organization scope.");
             }       
-       }
-       else{
+        }
+        else {
             $controlResult.AddMessage([VerificationResult]::Manual, "Pipeline settings could not be fetched due to insufficient permissions at project scope.");
-       }
+        }
         return $controlResult
     }
 
-    hidden [ControlResult] CheckJobAuthZScope([ControlResult] $controlResult)
-    {
-        if($this.PipelineSettingsObj)
-        {
+    hidden [ControlResult] CheckJobAuthZScope([ControlResult] $controlResult) {
+        if ($this.PipelineSettingsObj) {
             $orgLevelScope = $this.PipelineSettingsObj.enforceJobAuthScope.orgEnabled;
             $prjLevelScope = $this.PipelineSettingsObj.enforceJobAuthScope.enabled;
 
-            if($prjLevelScope -eq $true )
-            {
+            if ($prjLevelScope -eq $true ) {
                 $controlResult.AddMessage([VerificationResult]::Passed, "Job authorization scope is limited to current project for non-release pipelines.");
             }
-            else
-            {
+            else {
                 $controlResult.AddMessage([VerificationResult]::Failed, "Job authorization scope is set to project collection for non-release pipelines.");
             }     
             
-            if($orgLevelScope -eq $true )
-            {
+            if ($orgLevelScope -eq $true ) {
                 $controlResult.AddMessage("This setting is enabled (limited to current project) at organization level.");
             }
-            else
-            {
+            else {
                 $controlResult.AddMessage("This setting is disabled (set to project collection) at organization level.");
             }     
         }
-        else
-        {
+        else {
             $controlResult.AddMessage([VerificationResult]::Error, "Could not fetch project pipeline settings.");
         }       
         return $controlResult
     }
 
-    hidden [ControlResult] CheckJobAuthZReleaseScope([ControlResult] $controlResult)
-    {
-        if($this.PipelineSettingsObj)
-        {
+    hidden [ControlResult] CheckJobAuthZReleaseScope([ControlResult] $controlResult) {
+        if ($this.PipelineSettingsObj) {
             $orgLevelScope = $this.PipelineSettingsObj.enforceJobAuthScopeForReleases.orgEnabled;
             $prjLevelScope = $this.PipelineSettingsObj.enforceJobAuthScopeForReleases.enabled;
 
-            if($prjLevelScope -eq $true )
-            {
+            if ($prjLevelScope -eq $true ) {
                 $controlResult.AddMessage([VerificationResult]::Passed, "Job authorization scope is limited to current project for release pipelines.");
             }
-            else
-            {
+            else {
                 $controlResult.AddMessage([VerificationResult]::Failed, "Job authorization scope is set to project collection for release pipelines.");
             }     
             
-            if($orgLevelScope -eq $true )
-            {
+            if ($orgLevelScope -eq $true ) {
                 $controlResult.AddMessage("This setting is enabled (limited to current project) at organization level.");
             }
-            else
-            {
+            else {
                 $controlResult.AddMessage("This setting is disabled (set to project collection) at organization level.");
             }     
         }
-        else
-        {
+        else {
             $controlResult.AddMessage([VerificationResult]::Error, "Could not fetch project pipeline settings.");
         }       
         return $controlResult
     }
 
-    hidden [ControlResult] CheckAuthZRepoScope([ControlResult] $controlResult)
-    {
-        if($this.PipelineSettingsObj)
-        {
+    hidden [ControlResult] CheckAuthZRepoScope([ControlResult] $controlResult) {
+        if ($this.PipelineSettingsObj) {
             $orgLevelScope = $this.PipelineSettingsObj.enforceReferencedRepoScopedToken.orgEnabled;
             $prjLevelScope = $this.PipelineSettingsObj.enforceReferencedRepoScopedToken.enabled;
 
-            if($prjLevelScope -eq $true )
-            {
+            if ($prjLevelScope -eq $true ) {
                 $controlResult.AddMessage([VerificationResult]::Passed, "Job authorization scope of pipelines is limited to explicitly referenced Azure DevOps repositories.");
             }
-            else
-            {
+            else {
                 $controlResult.AddMessage([VerificationResult]::Failed, "Job authorization scope of pipelines is set to all Azure DevOps repositories in the authorized projects.");
             }     
             
-            if($orgLevelScope -eq $true )
-            {
+            if ($orgLevelScope -eq $true ) {
                 $controlResult.AddMessage("This setting is enabled (limited to explicitly referenced Azure DevOps repositories) at organization level.");
             }
-            else
-            {
+            else {
                 $controlResult.AddMessage("This setting is disabled (set to all Azure DevOps repositories in authorized projects) at organization level.");
             }     
         }
-        else
-        {
+        else {
             $controlResult.AddMessage([VerificationResult]::Error, "Could not fetch project pipeline settings.");
         }       
         return $controlResult
     }
 
-    hidden [ControlResult] CheckPublishMetadata([ControlResult] $controlResult)
-    {
-       if($this.PipelineSettingsObj)
-       {
+    hidden [ControlResult] CheckPublishMetadata([ControlResult] $controlResult) {
+        if ($this.PipelineSettingsObj) {
             
-            if($this.PipelineSettingsObj.publishPipelineMetadata.enabled -eq $true )
-            {
+            if ($this.PipelineSettingsObj.publishPipelineMetadata.enabled -eq $true ) {
                 $controlResult.AddMessage([VerificationResult]::Passed, "Publishing metadata from pipeline is enabled. It is set as '$($this.PipelineSettingsObj.publishPipelineMetadata.orgEnabled)' at organization scope.");
             }
-            else{
+            else {
                 $controlResult.AddMessage([VerificationResult]::Failed, "Publishing metadata from pipeline is disabled. It is set as '$($this.PipelineSettingsObj.publishPipelineMetadata.orgEnabled)' at organization scope.");
             }       
-       }
-       else{
+        }
+        else {
             $controlResult.AddMessage([VerificationResult]::Manual, "Pipeline settings could not be fetched due to insufficient permissions at project scope.");
-       }
+        }
         return $controlResult
     }
 
-    hidden [ControlResult] CheckRBACAccess([ControlResult] $controlResult)
-    {
+    hidden [ControlResult] CheckRBACAccess([ControlResult] $controlResult) {
         $url = 'https://dev.azure.com/{0}/_apis/Contribution/HierarchyQuery?api-version=5.0-preview.1' -f $($this.SubscriptionContext.SubscriptionName);
         $inputbody = '{"contributionIds":["ms.vss-admin-web.org-admin-groups-data-provider"],"dataProviderContext":{"properties":{"sourcePage":{"url":"","routeId":"ms.vss-admin-web.project-admin-hub-route","routeValues":{"project":"","adminPivot":"permissions","controller":"ContributedPage","action":"Execute"}}}}}' | ConvertFrom-Json
         $inputbody.dataProviderContext.properties.sourcePage.url = "https://dev.azure.com/$($this.SubscriptionContext.SubscriptionName)/$($this.ResourceContext.ResourceName)/_settings/permissions";
-        $inputbody.dataProviderContext.properties.sourcePage.routeValues.Project =$this.ResourceContext.ResourceName;
+        $inputbody.dataProviderContext.properties.sourcePage.routeValues.Project = $this.ResourceContext.ResourceName;
 
-        $groupsObj = [WebRequestHelper]::InvokePostWebRequest($url,$inputbody); 
+        $groupsObj = [WebRequestHelper]::InvokePostWebRequest($url, $inputbody); 
 
-        $Allgroups =  @()
-         $groupsObj.dataProviders."ms.vss-admin-web.org-admin-groups-data-provider".identities  | ForEach-Object {
+        $Allgroups = @()
+        $groupsObj.dataProviders."ms.vss-admin-web.org-admin-groups-data-provider".identities  | ForEach-Object {
             $Allgroups += $_;
         }  
 
-        $descrurl ='https://vssps.dev.azure.com/{0}/_apis/graph/descriptors/{1}?api-version=5.0-preview.1' -f $($this.SubscriptionContext.SubscriptionName), $this.ResourceContext.ResourceId.split('/')[-1];
+        $descrurl = 'https://vssps.dev.azure.com/{0}/_apis/graph/descriptors/{1}?api-version=5.0-preview.1' -f $($this.SubscriptionContext.SubscriptionName), $this.ResourceContext.ResourceId.split('/')[-1];
         $descr = [WebRequestHelper]::InvokeGetWebRequest($descrurl);
 
         $apiURL = "https://vssps.dev.azure.com/{0}/_apis/Graph/Users?scopeDescriptor={1}" -f $($this.SubscriptionContext.SubscriptionName), $descr[0];
@@ -250,9 +209,9 @@ class Project: ADOSVTBase
                 $Users+= $_   
         } #>
 
-        $groups = ($Allgroups | Select-Object -Property @{Name="Name"; Expression = {$_.displayName}},@{Name="Description"; Expression = {$_.description}});
+        $groups = ($Allgroups | Select-Object -Property @{Name = "Name"; Expression = { $_.displayName } }, @{Name = "Description"; Expression = { $_.description } });
         
-        $UsersNames = ($usersObj | Select-Object -Property @{Name="Name"; Expression = {$_.displayName}},@{Name="mailAddress"; Expression = {$_.mailAddress}})
+        $UsersNames = ($usersObj | Select-Object -Property @{Name = "Name"; Expression = { $_.displayName } }, @{Name = "mailAddress"; Expression = { $_.mailAddress } })
 
         if ( (($groups | Measure-Object).Count -gt 0) -or (($UsersNames | Measure-Object).Count -gt 0)) {
             $controlResult.AddMessage([VerificationResult]::Verify, "Verify users and groups present on project");
@@ -260,120 +219,111 @@ class Project: ADOSVTBase
             $controlResult.AddMessage("Verify groups has access on project", $groups); 
             $controlResult.AddMessage("Verify users has access on project", $UsersNames); 
         }
-        else
-        {
-            $controlResult.AddMessage([VerificationResult]::Passed,  "No users or groups found");
+        else {
+            $controlResult.AddMessage([VerificationResult]::Passed, "No users or groups found");
         }
 
         return $controlResult
     }
 
-    hidden [ControlResult] JustifyGroupMember([ControlResult] $controlResult)
-    {   
+    hidden [ControlResult] JustifyGroupMember([ControlResult] $controlResult) {   
         $grpmember = @();   
         $url = 'https://dev.azure.com/{0}/_apis/Contribution/HierarchyQuery?api-version=5.0-preview.1' -f $($this.SubscriptionContext.SubscriptionName);
         $inputbody = '{"contributionIds":["ms.vss-admin-web.org-admin-groups-data-provider"],"dataProviderContext":{"properties":{"sourcePage":{"url":"","routeId":"ms.vss-admin-web.project-admin-hub-route","routeValues":{"project":"","adminPivot":"permissions","controller":"ContributedPage","action":"Execute"}}}}}' | ConvertFrom-Json
         $inputbody.dataProviderContext.properties.sourcePage.url = "https://dev.azure.com/$($this.SubscriptionContext.SubscriptionName)/$($this.ResourceContext.ResourceName)/_settings/permissions";
-        $inputbody.dataProviderContext.properties.sourcePage.routeValues.Project =$this.ResourceContext.ResourceName;
+        $inputbody.dataProviderContext.properties.sourcePage.routeValues.Project = $this.ResourceContext.ResourceName;
 
-        $groupsObj = [WebRequestHelper]::InvokePostWebRequest($url,$inputbody); 
+        $groupsObj = [WebRequestHelper]::InvokePostWebRequest($url, $inputbody); 
 
-        $groups =  @()
-         $groupsObj.dataProviders."ms.vss-admin-web.org-admin-groups-data-provider".identities  | ForEach-Object {
+        $groups = @()
+        $groupsObj.dataProviders."ms.vss-admin-web.org-admin-groups-data-provider".identities  | ForEach-Object {
             $groups += $_;
         } 
          
         $apiURL = "https://dev.azure.com/{0}/_apis/Contribution/HierarchyQuery?api-version=5.0-preview" -f $($this.SubscriptionContext.SubscriptionName);
 
-        $membercount =0;
-        Foreach ($group in $groups){
+        $membercount = 0;
+        Foreach ($group in $groups) {
             $groupmember = @();
-         $descriptor = $group.descriptor;
-         $inputbody =  '{"contributionIds":["ms.vss-admin-web.org-admin-members-data-provider"],"dataProviderContext":{"properties":{"subjectDescriptor":"","sourcePage":{"url":"","routeId":"ms.vss-admin-web.project-admin-hub-route","routeValues":{"project":"","adminPivot":"permissions","controller":"ContributedPage","action":"Execute"}}}}}' | ConvertFrom-Json
+            $descriptor = $group.descriptor;
+            $inputbody = '{"contributionIds":["ms.vss-admin-web.org-admin-members-data-provider"],"dataProviderContext":{"properties":{"subjectDescriptor":"","sourcePage":{"url":"","routeId":"ms.vss-admin-web.project-admin-hub-route","routeValues":{"project":"","adminPivot":"permissions","controller":"ContributedPage","action":"Execute"}}}}}' | ConvertFrom-Json
                        
-         $inputbody.dataProviderContext.properties.subjectDescriptor = $descriptor;
-         $inputbody.dataProviderContext.properties.sourcePage.url = "https://dev.azure.com/$($this.SubscriptionContext.SubscriptionName)/$($this.ResourceContext.ResourceName)/_settings/permissions?subjectDescriptor=$($descriptor)";
-         $inputbody.dataProviderContext.properties.sourcePage.routeValues.Project =$this.ResourceContext.ResourceName;
+            $inputbody.dataProviderContext.properties.subjectDescriptor = $descriptor;
+            $inputbody.dataProviderContext.properties.sourcePage.url = "https://dev.azure.com/$($this.SubscriptionContext.SubscriptionName)/$($this.ResourceContext.ResourceName)/_settings/permissions?subjectDescriptor=$($descriptor)";
+            $inputbody.dataProviderContext.properties.sourcePage.routeValues.Project = $this.ResourceContext.ResourceName;
 
-         $usersObj = [WebRequestHelper]::InvokePostWebRequest($apiURL,$inputbody);
+            $usersObj = [WebRequestHelper]::InvokePostWebRequest($apiURL, $inputbody);
 
-         $usersObj.dataProviders."ms.vss-admin-web.org-admin-members-data-provider".identities  | ForEach-Object {
-            $groupmember += $_;
-        }  
+            $usersObj.dataProviders."ms.vss-admin-web.org-admin-members-data-provider".identities  | ForEach-Object {
+                $groupmember += $_;
+            }  
 
-        $grpmember = ($groupmember | Select-Object -Property @{Name="Name"; Expression = {$_.displayName}},@{Name="mailAddress"; Expression = {$_.mailAddress}});
-        if ($grpmember -ne $null) {
-            $membercount= $membercount + 1
-            $controlResult.AddMessage("Verify below members of the group: '$($group.principalname)', Description: $($group.description)", $grpmember); 
+            $grpmember = ($groupmember | Select-Object -Property @{Name = "Name"; Expression = { $_.displayName } }, @{Name = "mailAddress"; Expression = { $_.mailAddress } });
+            if ($grpmember -ne $null) {
+                $membercount = $membercount + 1
+                $controlResult.AddMessage("Verify below members of the group: '$($group.principalname)', Description: $($group.description)", $grpmember); 
+            }
+
         }
 
-        }
-
-        if ( $membercount  -gt 0)  {
+        if ( $membercount -gt 0) {
             $controlResult.AddMessage([VerificationResult]::Verify, "Verify members of groups present on project");
         }
-        else
-        {
-            $controlResult.AddMessage([VerificationResult]::Passed,  "No users or groups found");
+        else {
+            $controlResult.AddMessage([VerificationResult]::Passed, "No users or groups found");
         }
 
         return $controlResult
     }
 
-    hidden [ControlResult] CheckMinPACount([ControlResult] $controlResult)
-    {
+    hidden [ControlResult] CheckMinPACount([ControlResult] $controlResult) {
         $TotalPAMembers = 0;
         if (($this.PAMembers | Measure-Object).Count -eq 0) {
-            $this.PAMembers += [AdministratorHelper]::GetTotalPAMembers($this.SubscriptionContext.SubscriptionName,$this.ResourceContext.ResourceName)
-            $this.PAMembers = $this.PAMembers | Select-Object displayName,mailAddress
+            $this.PAMembers += [AdministratorHelper]::GetTotalPAMembers($this.SubscriptionContext.SubscriptionName, $this.ResourceContext.ResourceName)
+            $this.PAMembers = $this.PAMembers | Select-Object displayName, mailAddress
         }
         $TotalPAMembers = ($this.PAMembers | Measure-Object).Count
         $controlResult.AddMessage("There are a total of $TotalPAMembers Project Administrators in your project.")
-        if($TotalPAMembers -lt $this.ControlSettings.Project.MinPAMembersPermissible){
-            $controlResult.AddMessage([VerificationResult]::Failed,"Number of administrators configured are less than the minimum required administrators count: $($this.ControlSettings.Project.MinPAMembersPermissible).");
+        if ($TotalPAMembers -lt $this.ControlSettings.Project.MinPAMembersPermissible) {
+            $controlResult.AddMessage([VerificationResult]::Failed, "Number of administrators configured are less than the minimum required administrators count: $($this.ControlSettings.Project.MinPAMembersPermissible).");
         }
-        else{
-            $controlResult.AddMessage([VerificationResult]::Passed,"Number of administrators configured are more than the minimum required administrators count: $($this.ControlSettings.Project.MinPAMembersPermissible).");
+        else {
+            $controlResult.AddMessage([VerificationResult]::Passed, "Number of administrators configured are more than the minimum required administrators count: $($this.ControlSettings.Project.MinPAMembersPermissible).");
         }
-        if($TotalPAMembers -gt 0){
-            $controlResult.AddMessage("Verify the following Project Administrators: ",$this.PAMembers)
-            $controlResult.SetStateData("List of Project Administrators: ",$this.PAMembers)
+        if ($TotalPAMembers -gt 0) {
+            $controlResult.AddMessage("Verify the following Project Administrators: ", $this.PAMembers)
+            $controlResult.SetStateData("List of Project Administrators: ", $this.PAMembers)
         }    
         return $controlResult
     }
 
-    hidden [ControlResult] CheckMaxPACount([ControlResult] $controlResult)
-    {
+    hidden [ControlResult] CheckMaxPACount([ControlResult] $controlResult) {
         $TotalPAMembers = 0;
         if (($this.PAMembers | Measure-Object).Count -eq 0) {
-            $this.PAMembers += [AdministratorHelper]::GetTotalPAMembers($this.SubscriptionContext.SubscriptionName,$this.ResourceContext.ResourceName)
-            $this.PAMembers = $this.PAMembers | Select-Object displayName,mailAddress
+            $this.PAMembers += [AdministratorHelper]::GetTotalPAMembers($this.SubscriptionContext.SubscriptionName, $this.ResourceContext.ResourceName)
+            $this.PAMembers = $this.PAMembers | Select-Object displayName, mailAddress
         }
         $TotalPAMembers = ($this.PAMembers | Measure-Object).Count
         $controlResult.AddMessage("There are a total of $TotalPAMembers Project Administrators in your project.")
-        if($TotalPAMembers -gt $this.ControlSettings.Project.MaxPAMembersPermissible){
-            $controlResult.AddMessage([VerificationResult]::Failed,"Number of administrators configured are more than the approved limit: $($this.ControlSettings.Project.MaxPAMembersPermissible).");
+        if ($TotalPAMembers -gt $this.ControlSettings.Project.MaxPAMembersPermissible) {
+            $controlResult.AddMessage([VerificationResult]::Failed, "Number of administrators configured are more than the approved limit: $($this.ControlSettings.Project.MaxPAMembersPermissible).");
         }
-        else{
-            $controlResult.AddMessage([VerificationResult]::Passed,"Number of administrators configured are within than the approved limit: $($this.ControlSettings.Project.MaxPAMembersPermissible).");
+        else {
+            $controlResult.AddMessage([VerificationResult]::Passed, "Number of administrators configured are within than the approved limit: $($this.ControlSettings.Project.MaxPAMembersPermissible).");
         }
-        if($TotalPAMembers -gt 0){
-            $controlResult.AddMessage("Verify the following Project Administrators: ",$this.PAMembers)
-            $controlResult.SetStateData("List of Project Administrators: ",$this.PAMembers)
+        if ($TotalPAMembers -gt 0) {
+            $controlResult.AddMessage("Verify the following Project Administrators: ", $this.PAMembers)
+            $controlResult.SetStateData("List of Project Administrators: ", $this.PAMembers)
         }         
         return $controlResult
     }
 
-    hidden [ControlResult] CheckSCALTForAdminMembers([ControlResult] $controlResult)
-    {
-        try
-        {
-            if(($null -ne $this.ControlSettings) -and [Helpers]::CheckMember($this.ControlSettings, "Project.GroupsToCheckForSCAltMembers"))
-            {
+    hidden [ControlResult] CheckSCALTForAdminMembers([ControlResult] $controlResult) {
+        try {
+            if (($null -ne $this.ControlSettings) -and [Helpers]::CheckMember($this.ControlSettings, "Project.GroupsToCheckForSCAltMembers")) {
 
                 $adminGroupNames = $this.ControlSettings.Project.GroupsToCheckForSCAltMembers;
-                if (($adminGroupNames | Measure-Object).Count -gt 0) 
-                {
+                if (($adminGroupNames | Measure-Object).Count -gt 0) {
                     #api call to get descriptor for organization groups. This will be used to fetch membership of individual groups later.
                     $url = 'https://dev.azure.com/{0}/_apis/Contribution/HierarchyQuery?api-version=5.0-preview.1' -f $($this.SubscriptionContext.SubscriptionName);
                     $inputbody = '{"contributionIds":["ms.vss-admin-web.org-admin-groups-data-provider"],"dataProviderContext":{"properties":{"sourcePage":{"url":"","routeId":"ms.vss-admin-web.project-admin-hub-route","routeValues":{"project":"","adminPivot":"permissions","controller":"ContributedPage","action":"Execute"}}}}}' | ConvertFrom-Json
@@ -382,42 +332,37 @@ class Project: ADOSVTBase
         
                     $response = [WebRequestHelper]::InvokePostWebRequest($url, $inputbody);    
                     
-                    if ($response -and [Helpers]::CheckMember($response[0], "dataProviders") -and $response[0].dataProviders."ms.vss-admin-web.org-admin-groups-data-provider") 
-                    {
+                    if ($response -and [Helpers]::CheckMember($response[0], "dataProviders") -and $response[0].dataProviders."ms.vss-admin-web.org-admin-groups-data-provider") {
                         $adminGroups = @();
                         $adminGroups += $response.dataProviders."ms.vss-admin-web.org-admin-groups-data-provider".identities | where { $_.displayName -in $adminGroupNames }
                         
-                        if(($adminGroups | Measure-Object).Count -gt 0)
-                        {
+                        if (($adminGroups | Measure-Object).Count -gt 0) {
                             #global variable to track admin members across all admin groups
                             $allAdminMembers = @();
                             
-                            for ($i = 0; $i -lt $adminGroups.Count; $i++) 
-                            {
+                            for ($i = 0; $i -lt $adminGroups.Count; $i++) {
                                 # [AdministratorHelper]::AllPAMembers is a static variable. Always needs ro be initialized. At the end of each iteration, it will be populated with members of that particular admin group.
                                 [AdministratorHelper]::AllPAMembers = @();
                                 # Helper function to fetch flattened out list of group members.
-                                [AdministratorHelper]::FindPAMembers($adminGroups[$i].descriptor,  $this.SubscriptionContext.SubscriptionName, $this.ResourceContext.ResourceName)
+                                [AdministratorHelper]::FindPAMembers($adminGroups[$i].descriptor, $this.SubscriptionContext.SubscriptionName, $this.ResourceContext.ResourceName)
                                 
                                 $groupMembers = @();
                                 # Add the members of current group to this temp variable.
                                 $groupMembers += [AdministratorHelper]::AllPAMembers
                                 # Create a custom object to append members of current group with the group name. Each of these custom object is added to the global variable $allAdminMembers for further analysis of SC-Alt detection.
-                                $groupMembers | ForEach-Object {$allAdminMembers += @( [PSCustomObject] @{ name = $_.displayName; mailAddress = $_.mailAddress; id = $_.originId; groupName = $adminGroups[$i].displayName } )} 
+                                $groupMembers | ForEach-Object { $allAdminMembers += @( [PSCustomObject] @{ name = $_.displayName; mailAddress = $_.mailAddress; id = $_.originId; groupName = $adminGroups[$i].displayName } ) } 
                             }
                             
                             # clearing cached value in [AdministratorHelper]::AllPAMembers as it can be used in attestation later and might have incorrect group loaded.
                             [AdministratorHelper]::AllPAMembers = @();
                             # Filtering out distinct entries. A user might be added directly to the admin group or might be a member of a child group of the admin group.
-                            $allAdminMembers = $allAdminMembers| Sort-Object -Property id -Unique
+                            $allAdminMembers = $allAdminMembers | Sort-Object -Property id -Unique
 
-                            if(($allAdminMembers | Measure-Object).Count -gt 0)
-                            {
-                                if([Helpers]::CheckMember($this.ControlSettings, "AlernateAccountRegularExpressionForOrg")){
+                            if (($allAdminMembers | Measure-Object).Count -gt 0) {
+                                if ([Helpers]::CheckMember($this.ControlSettings, "AlernateAccountRegularExpressionForOrg")) {
                                     $matchToSCAlt = $this.ControlSettings.AlernateAccountRegularExpressionForOrg
                                     #currently SC-ALT regex is a singleton expression. In case we have multiple regex - we need to make the controlsetting entry as an array and accordingly loop the regex here.
-                                    if (-not [string]::IsNullOrEmpty($matchToSCAlt)) 
-                                    {
+                                    if (-not [string]::IsNullOrEmpty($matchToSCAlt)) {
                                         $nonSCMembers = @();
                                         $nonSCMembers += $allAdminMembers | Where-Object { $_.mailAddress -notmatch $matchToSCAlt }
                                         $nonSCCount = ($nonSCMembers | Measure-Object).Count
@@ -426,9 +371,8 @@ class Project: ADOSVTBase
                                         $SCMembers += $allAdminMembers | Where-Object { $_.mailAddress -match $matchToSCAlt }   
                                         $SCCount = ($SCMembers | Measure-Object).Count
 
-                                        if ($nonSCCount -gt 0) 
-                                        {
-                                            $nonSCMembers = $nonSCMembers | Select-Object name,mailAddress,groupName
+                                        if ($nonSCCount -gt 0) {
+                                            $nonSCMembers = $nonSCMembers | Select-Object name, mailAddress, groupName
                                             $stateData = @();
                                             $stateData += $nonSCMembers
                                             $controlResult.AddMessage([VerificationResult]::Failed, "`nTotal number of non SC-ALT accounts with admin privileges: $nonSCCount"); 
@@ -437,13 +381,11 @@ class Project: ADOSVTBase
                                             $controlResult.AdditionalInfo += "Total number of non SC-ALT accounts with admin privileges: " + $nonSCCount;
                                             $controlResult.AdditionalInfo += "List of non SC-ALT accounts with admin privileges: " + [JsonHelper]::ConvertToJsonCustomCompressed($stateData);
                                         }
-                                        else 
-                                        {
+                                        else {
                                             $controlResult.AddMessage([VerificationResult]::Passed, "No users have admin privileges with non SC-ALT accounts.");
                                         }
-                                        if ($SCCount -gt 0) 
-                                        {
-                                            $SCMembers = $SCMembers | Select-Object name,mailAddress,groupName
+                                        if ($SCCount -gt 0) {
+                                            $SCMembers = $SCMembers | Select-Object name, mailAddress, groupName
                                             $SCData = @();
                                             $SCData += $SCMembers
                                             $controlResult.AddMessage("`nTotal number of SC-ALT accounts with admin privileges: $SCCount");
@@ -455,37 +397,32 @@ class Project: ADOSVTBase
                                         $controlResult.AddMessage([VerificationResult]::Manual, "Regular expressions for detecting SC-ALT account is not defined in the organization.");
                                     }
                                 }
-                                else{
+                                else {
                                     $controlResult.AddMessage([VerificationResult]::Error, "Regular expressions for detecting SC-ALT account is not defined in the organization. Please update your ControlSettings.json as per the latest AzSK.ADO PowerShell module.");
                                 }   
                             }
-                            else
-                            { #count is 0 then there is no members added in the admin groups
+                            else {
+                                #count is 0 then there is no members added in the admin groups
                                 $controlResult.AddMessage([VerificationResult]::Passed, "Admin groups does not have any members.");
                             }
                         }
-                        else
-                        {
+                        else {
                             $controlResult.AddMessage([VerificationResult]::Error, "Could not find the list of administrator groups in the project.");
                         }
                     }
-                    else
-                    {
+                    else {
                         $controlResult.AddMessage([VerificationResult]::Error, "Could not find the list of groups in the project.");
                     }
                 }
-                else
-                {
+                else {
                     $controlResult.AddMessage([VerificationResult]::Manual, "List of administrator groups for detecting non SC-ALT accounts is not defined in your project.");    
                 }
             }
-            else
-            {
+            else {
                 $controlResult.AddMessage([VerificationResult]::Error, "List of administrator groups for detecting non SC-ALT accounts is not defined in your project. Please update your ControlSettings.json as per the latest AzSK.ADO PowerShell module.");
             }
         }
-        catch
-        {
+        catch {
             $controlResult.AddMessage([VerificationResult]::Error, "Could not fetch the list of groups in the project.");
         }
        
@@ -499,11 +436,11 @@ class Project: ADOSVTBase
         try {
             $response = [WebRequestHelper]::InvokeGetWebRequest($url);
             # check on response object, if null -> no secure files present
-            if(([Helpers]::CheckMember($response[0],"count",$false)) -and ($response[0].count -eq 0)) {
+            if (([Helpers]::CheckMember($response[0], "count", $false)) -and ($response[0].count -eq 0)) {
                 $controlResult.AddMessage([VerificationResult]::Passed, "There are no secure files present.");
             }
             # else there are secure files present
-            elseif((-not ([Helpers]::CheckMember($response[0],"count"))) -and ($response.Count -gt 0)) {
+            elseif ((-not ([Helpers]::CheckMember($response[0], "count"))) -and ($response.Count -gt 0)) {
                 # object to keep a track of authorized secure files and their count
                 [Hashtable] $secFiles = @{
                     count = 0;
@@ -513,9 +450,9 @@ class Project: ADOSVTBase
                     $url = "https://dev.azure.com/$($this.SubscriptionContext.SubscriptionName)/$($projectId)/_apis/build/authorizedresources?type=securefile&id=$($secFile.id)"
                     $resp = [WebRequestHelper]::InvokeGetWebRequest($url);
                     # check if the secure file is authorized
-                    if((-not ([Helpers]::CheckMember($resp[0],"count"))) -and ($resp.Count -gt 0)) {
-                        if([Helpers]::CheckMember($resp, "authorized")) {
-                            if($resp.authorized) {
+                    if ((-not ([Helpers]::CheckMember($resp[0], "count"))) -and ($resp.Count -gt 0)) {
+                        if ([Helpers]::CheckMember($resp, "authorized")) {
+                            if ($resp.authorized) {
                                 $secFiles.count += 1;
                                 $secFiles.names += $secFile.name;
                             }
@@ -523,7 +460,7 @@ class Project: ADOSVTBase
                     }
                 }
                 # there are secure files present that are authorized
-                if($secFiles.count -gt 0) {
+                if ($secFiles.count -gt 0) {
                     $controlResult.AddMessage([VerificationResult]::Failed, "Total number of secure files in the project that are authorized for use in all pipelines: $($secFiles.count)");
                     $controlResult.AddMessage("List of secure files in the project that are authorized for use in all pipelines: ", $secFiles.names);
                 }
@@ -536,6 +473,260 @@ class Project: ADOSVTBase
         catch {
             $controlResult.AddMessage([VerificationResult]::Error, "Could not fetch the list of secure files.");
         }
+        return $controlResult
+    }
+
+    hidden [ControlResult] CheckAuthorEmailValidationPolicy([ControlResult] $controlResult) {
+        # body for post request
+        $url = 'https://dev.azure.com/{0}/_apis/Contribution/HierarchyQuery?api-version=5.0-preview.1' -f $($this.SubscriptionContext.SubscriptionName);
+        $inputbody = '{"contributionIds":["ms.vss-code-web.repository-policies-data-provider"],"dataProviderContext":{"properties":{"projectId": "","sourcePage":{"url":"","routeId":"ms.vss-admin-web.project-admin-hub-route","routeValues":{"project":"","adminPivot":"repositories","controller":"ContributedPage","action":"Execute"}}}}}' | ConvertFrom-Json
+        $inputbody.dataProviderContext.properties.projectId = "$($this.ResourceContext.ResourceName)"
+        $inputbody.dataProviderContext.properties.sourcePage.routeValues.project = "$($this.ResourceContext.ResourceName)"
+        $inputbody.dataProviderContext.properties.sourcePage.url = "https://$($this.SubscriptionContext.SubscriptionName).visualstudio.com/$($this.ResourceContext.ResourceName)/_settings/repositories?_a=policies"
+
+        try {
+            $response = [WebRequestHelper]::InvokePostWebRequest($url, $inputbody);
+            if ([Helpers]::CheckMember($response, "dataProviders") -and $response.dataProviders.'ms.vss-code-web.repository-policies-data-provider' -and [Helpers]::CheckMember($response.dataProviders.'ms.vss-code-web.repository-policies-data-provider', "policyGroups")) {
+                # fetching policy groups
+                $policyGroups = $response.dataProviders."ms.vss-code-web.repository-policies-data-provider".policyGroups
+                # fetching "Commit author email validation"
+                if ([Helpers]::CheckMember($policyGroups, "77ed4bd3-b063-4689-934a-175e4d0a78d7")) {
+                    $currentScopePolicies_email = $policyGroups."77ed4bd3-b063-4689-934a-175e4d0a78d7".currentScopePolicies
+                    $name_email = $currentScopePolicies_email.type.displayName
+                    # validating email patterns
+                    $flag = 0;
+                    if ($name_email -eq "Commit author email validation") {
+                        $emailPatterns = $currentScopePolicies_email.settings.authorEmailPatterns
+                        if ($emailPatterns -eq $null) { $flag = 1; }
+                        foreach ($val in $emailPatterns) {
+                            if ($val -notin $this.ControlSettings.EmailPatterns -and $val -ne "") {
+                                $flag = 1;
+                                break;
+                            }
+                        }
+                    }
+                    if ($flag -eq 0) {
+                        $controlResult.AddMessage([VerificationResult]::Passed, "Validated policy 'Commit author email validation' and Email patterns matched successfully.");
+                    }
+                    else {
+                        $controlResult.AddMessage([VerificationResult]::Failed, "Can't validated policy 'Commit author email validation'.");
+                    }
+                }
+                else {
+                    $controlResult.AddMessage([VerificationResult]::Error, "Can't validated policy 'Commit author email validation'.");
+                }
+            }
+            else {
+                $controlResult.AddMessage([VerificationResult]::Error, "Can't validated policy 'Commit author email validation'.");
+            }
+        }
+        catch {
+            $controlResult.AddMessage([VerificationResult]::Error, "Can't validated policy 'Commit author email validation'.");
+        }
+        return $controlResult
+    }
+
+    hidden [ControlResult] CheckCredentialsAndSecretsPolicy([ControlResult] $controlResult) {
+        # body for post request
+        $url = 'https://dev.azure.com/{0}/_apis/Contribution/HierarchyQuery?api-version=5.0-preview.1' -f $($this.SubscriptionContext.SubscriptionName);
+        $inputbody = '{"contributionIds":["ms.vss-code-web.repository-policies-data-provider"],"dataProviderContext":{"properties":{"projectId": "","sourcePage":{"url":"","routeId":"ms.vss-admin-web.project-admin-hub-route","routeValues":{"project":"","adminPivot":"repositories","controller":"ContributedPage","action":"Execute"}}}}}' | ConvertFrom-Json
+        $inputbody.dataProviderContext.properties.projectId = "$($this.ResourceContext.ResourceName)"
+        $inputbody.dataProviderContext.properties.sourcePage.routeValues.project = "$($this.ResourceContext.ResourceName)"
+        $inputbody.dataProviderContext.properties.sourcePage.url = "https://$($this.SubscriptionContext.SubscriptionName).visualstudio.com/$($this.ResourceContext.ResourceName)/_settings/repositories?_a=policies"
+        
+        try {
+            $response = [WebRequestHelper]::InvokePostWebRequest($url, $inputbody);
+            if ([Helpers]::CheckMember($response, "dataProviders") -and $response.dataProviders.'ms.vss-code-web.repository-policies-data-provider' -and [Helpers]::CheckMember($response.dataProviders.'ms.vss-code-web.repository-policies-data-provider', "policyGroups")) { 
+                # fetching policy groups
+                $policyGroups = $response.dataProviders."ms.vss-code-web.repository-policies-data-provider".policyGroups
+                # fetching "Secrets scanning restriction"
+                if ([Helpers]::CheckMember($policyGroups, "e67ae10f-cf9a-40bc-8e66-6b3a8216956e")) {
+                    $currentScopePolicies_secrets = $policyGroups."e67ae10f-cf9a-40bc-8e66-6b3a8216956e".currentScopePolicies
+                    $name_secret = $currentScopePolicies_secrets.type.displayName
+                    if ($name_secret -eq "Secrets scanning restriction") {
+                        if ($currentScopePolicies_secrets.isEnabled) {
+                            $controlResult.AddMessage([VerificationResult]::Passed, "Validated policy 'Check for credentials and other secrets'.");
+                        }
+                    }
+                    else {
+                        $controlResult.AddMessage([VerificationResult]::Failed, "Can't validated policy 'Check for credentials and other secrets'.");
+                    }
+                }
+                else {
+                    $controlResult.AddMessage([VerificationResult]::Failed, "Can't validated policy 'Check for credentials and other secrets'.");
+                }
+            }
+            else {
+                $controlResult.AddMessage([VerificationResult]::Error, "Can't validated policy 'Check for credentials and other secrets'.");
+            }
+        }
+        catch {
+            $controlResult.AddMessage([VerificationResult]::Error, "Can't validated policy 'Check for credentials and other secrets'.");
+        }
+        return $controlResult
+    }
+    
+    hidden [ControlResult] CheckInactiveRepo([ControlResult] $controlResult) {
+        $StopWatch = new-object system.diagnostics.stopwatch
+        $StopWatch.Start()
+        # fetch repositories
+        $repoDefnURL = ("https://dev.azure.com/$($this.SubscriptionContext.SubscriptionName)/$($this.ResourceContext.ResourceName)/_apis/git/repositories?api-version=6.0")
+        try {
+            $repoDefnsObj = [WebRequestHelper]::InvokeGetWebRequest($repoDefnURL) 
+            $inactiveRepos = @()
+            if (($repoDefnsObj | Measure-Object).Count -gt 0) {
+                foreach ($repo in $repoDefnsObj) {
+                    $currentDate = Get-Date
+                    $projectId = ($this.ResourceContext.ResourceId -split "project/")[-1].Split('/')[0]
+                    # check if repo has commits in past ActivityThresholdInDays days
+                    $thresholdDate = $currentDate.AddDays(-$this.ControlSettings.Repo.ActivityThresholdInDays);
+                    $url = "https://dev.azure.com/$($this.SubscriptionContext.SubscriptionName)/$($this.ResourceContext.ResourceName)/_apis/git/repositories/$($repo.id)/commits?searchCriteria.fromDate=$($thresholdDate)&&api-version=6.0"
+                    $res = [WebRequestHelper]::InvokeGetWebRequest($url);
+                    # When there are no commits, CheckMember in the below condition returns false when checknull flag [third param in CheckMember] is not specified (default value is $true). Assiging it $false.
+                    if (([Helpers]::CheckMember($res[0], "count", $false)) -and ($res[0].count -eq 0)) {
+                        $inactiveRepos += $repo.name
+                    }
+                }
+                if ($inactiveRepos.Count -gt 0) {
+                    $controlResult.AddMessage([VerificationResult]::Failed, "Inactive repositories that has no commits in last $($this.ControlSettings.Repo.ActivityThresholdInDays) days:", $inactiveRepos);
+                }
+                else {
+                    $controlResult.AddMessage([VerificationResult]::Passed, "There are no inactive repositories.");
+                }
+            }
+        }
+        catch {
+            $controlResult.AddMessage([VerificationResult]::Error, "Could not fetch the list of inactive repositories in the project.");
+        }
+        $StopWatch.Stop()
+        $Seconds = $StopWatch.elapsed.TotalSeconds
+        $controlResult.AddMessage("Time Taken in Seconds: $($Seconds)");
+        return $controlResult
+    }
+
+    hidden [ControlResult] CheckRepoRBACAccess([ControlResult] $controlResult) {
+        $StopWatch = new-object system.diagnostics.stopwatch
+        $StopWatch.Start()
+        $projectId = ($this.ResourceContext.ResourceId -split "project/")[-1].Split('/')[0]
+        # fetch repositories
+        $repoDefnURL = ("https://dev.azure.com/$($this.SubscriptionContext.SubscriptionName)/$($this.ResourceContext.ResourceName)/_apis/git/repositories?api-version=6.0")
+        try {
+            $repoDefnsObj = [WebRequestHelper]::InvokeGetWebRequest($repoDefnURL) 
+            foreach ($repo in $repoDefnsObj) {
+                $url = "https://dev.azure.com/$($this.SubscriptionContext.SubscriptionName)/_apis/Contribution/HierarchyQuery?api-version=5.0-preview.1"
+                $body = "{
+                    'contributionIds': [
+                        'ms.vss-admin-web.security-view-members-data-provider'
+                    ],
+                    'dataProviderContext': {
+                        'properties': {
+                            'permissionSetId': '2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87',
+                            'permissionSetToken': '',
+                            'sourcePage': {
+                                'url': '',
+                                'routeId': 'ms.vss-admin-web.project-admin-hub-route',
+                                'routeValues': {
+                                    'project': '',
+                                    'adminPivot': 'repositories',
+                                    'controller': 'ContributedPage',
+                                    'action': 'Execute',
+                                    'serviceHost': ''
+                                }
+                            }
+                        }
+                    }
+                }" | ConvertFrom-Json
+                $body.dataProviderContext.properties.permissionSetToken = "repoV2/$($projectId)/$($repo.id)"
+                $body.dataProviderContext.properties.sourcePage.url = "https://dev.azure.com/$($this.SubscriptionContext.SubscriptionName)/$projectId/_settings/repositories?repo=$($repo.id)&_a=permissionsMid";
+                $body.dataProviderContext.properties.sourcePage.routeValues.project = "$($projectId)";
+                $response = ""
+                $response = [WebRequestHelper]::InvokePostWebRequest($url, $body);
+                if ([Helpers]::CheckMember($response, "dataProviders") -and $response.dataProviders.'ms.vss-admin-web.security-view-members-data-provider' -and [Helpers]::CheckMember($response.dataProviders.'ms.vss-admin-web.security-view-members-data-provider', "identities")) {
+                    $identities = $response.dataProviders.'ms.vss-admin-web.security-view-members-data-provider'.identities
+                    $names = @()
+                    foreach ($identity in $identities) {
+                        $names += $identity.displayName
+                    }
+                    $controlResult.AddMessage("Validate that the following identities have been provided with minimum RBAC access to [$($this.ResourceContext.ResourceName)] repository.", $names);
+                    $controlResult.SetStateData("Repository access list: ", $names);
+                }
+                else {
+                    $controlResult.AddMessage([VerificationResult]::Manual, "Unable to fetch repository details. Please verify from portal all teams/groups are granted minimum required permissions on repo.");
+                }
+            }
+            $controlResult.AddMessage([VerificationResult]::Verify)
+        }
+        catch {
+            $controlResult.AddMessage([VerificationResult]::Manual, "Unable to fetch repository details. Please verify from portal all teams/groups are granted minimum required permissions on repo.");
+        }
+        $StopWatch.Stop()
+        $Seconds = $StopWatch.elapsed.TotalSeconds
+        $controlResult.AddMessage("Time Taken in Seconds: $($Seconds)");
+        return $controlResult
+    }
+
+    hidden [ControlResult] CheckInheritedPermissions([ControlResult] $controlResult) {
+        $StopWatch = new-object system.diagnostics.stopwatch
+        $StopWatch.Start()
+        $projectId = ($this.ResourceContext.ResourceId -split "project/")[-1].Split('/')[0]
+        # fetch repositories
+        $repoDefnURL = ("https://dev.azure.com/$($this.SubscriptionContext.SubscriptionName)/$($this.ResourceContext.ResourceName)/_apis/git/repositories?api-version=6.0")
+        try {
+            $repoDefnsObj = [WebRequestHelper]::InvokeGetWebRequest($repoDefnURL) 
+            $failedRepos = @()
+            foreach ($repo in $repoDefnsObj) {
+                $url = "https://dev.azure.com/$($this.SubscriptionContext.SubscriptionName)/_apis/Contribution/HierarchyQuery?api-version=5.0-preview.1"
+                $body = "{
+                    'contributionIds': [
+                        'ms.vss-admin-web.security-view-data-provider'
+                    ],
+                    'dataProviderContext': {
+                        'properties': {
+                            'permissionSetId': '2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87',
+                            'permissionSetToken': '',
+                            'sourcePage': {
+                                'url': '',
+                                'routeId': 'ms.vss-admin-web.project-admin-hub-route',
+                                'routeValues': {
+                                    'project': '',
+                                    'adminPivot': 'repositories',
+                                    'controller': 'ContributedPage',
+                                    'action': 'Execute',
+                                    'serviceHost': ''
+                                }
+                            }
+                        }
+                    }
+                }" | ConvertFrom-Json
+                $body.dataProviderContext.properties.permissionSetToken = "repoV2/$($projectId)/$($repo.id)"
+                $body.dataProviderContext.properties.sourcePage.url = "https://dev.azure.com/$($this.SubscriptionContext.SubscriptionName)/$projectId/_settings/repositories?repo=/$($repo.id)&_a=permissionsMid";
+                $body.dataProviderContext.properties.sourcePage.routeValues.project = "$projectId";
+                $response = ""
+                $response = [WebRequestHelper]::InvokePostWebRequest($url, $body);
+                if ([Helpers]::CheckMember($response, "dataProviders") -and $response.dataProviders.'ms.vss-admin-web.security-view-data-provider' -and [Helpers]::CheckMember($response.dataProviders.'ms.vss-admin-web.security-view-data-provider', "permissionsContextJson")) {
+                    $permissionsContextJson = $response.dataProviders.'ms.vss-admin-web.security-view-data-provider'.permissionsContextJson
+                    $permissionsContextJson = $permissionsContextJson | ConvertFrom-Json
+                    if ($permissionsContextJson.inheritPermissions) {
+                        $failedRepos += $repo.name
+                    }
+                }
+                else {
+                    $controlResult.AddMessage([VerificationResult]::Error, "Unable to fetch repository details. Please verify from portal that permission inheritance is turned OFF.");
+                }
+            }
+            if($failedRepos.Count -gt 0){
+                $controlResult.AddMessage([VerificationResult]::Failed, "Inherited permissions are enabled on these repositories:", $failedRepos);
+            }
+            else {
+                $controlResult.AddMessage([VerificationResult]::Passed, "Inherited permissions are disabled on all repositories.");
+            }
+        }
+        catch {
+            $controlResult.AddMessage([VerificationResult]::Error, "Unable to fetch repository details. Please verify from portal that permission inheritance is turned OFF.");
+        }
+        $StopWatch.Stop()
+        $Seconds = $StopWatch.elapsed.TotalSeconds
+        $controlResult.AddMessage("Time Taken in Seconds: $($Seconds)");
         return $controlResult
     }
 }

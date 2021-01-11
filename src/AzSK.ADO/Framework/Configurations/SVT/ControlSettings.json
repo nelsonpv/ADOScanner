@@ -349,5 +349,14 @@
     "Microsoft.Keyvault", 
     "Microsoft.Resources", 
     "Microsoft.OperationalInsights"
+  ],
+  "Repo": {
+    "ActivityThresholdInDays": 180
+  },
+  "EmailPatterns": [
+    "*@microsoft.com",
+    "*@exchange.microsoft.com",
+    "*@ntdev.microsoft.com",
+    "*@microsoftfederal.com"
   ]
 }
